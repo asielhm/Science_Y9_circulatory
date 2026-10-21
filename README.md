@@ -6,9 +6,15 @@ A GitHub Pages–ready learning website built from the uploaded OrganUI heart mo
 
 1. **In the body** — illustrated location of the heart between the lungs.
 2. **Zoom into the heart** — a real rotatable anatomical GLB heart model; clicking structures displays their function.
-3. **Guided virtual dissection** — staged removal of the right atrial wall, left atrial wall, and *combined* ventricular wall to reveal ventricular cavity surfaces, with knowledge checks.
+3. **Guided virtual dissection** — the 12-stage sequence supplied by the user from [Biology Junction’s heart dissection](https://biologyjunction.com/heart-dissection/): orientation; pericardium; external landmarks; major vessels; pulmonary/right ventricular incision; right-side opening; tricuspid apparatus and septum; pulmonary valve; left ventricular incision; left-side opening and mitral valve; aortic incision and valve; blood flow and ventricular comparison.
 
-**Scientific limitation:** This is a staged hide/reveal model, not physically accurate freehand scalpel dissection. The source GLB combines the two ventricular walls into one mesh, and does not contain the heart valves, pulmonary veins, full lung geometry or body. The torso on page 1 is an illustrative SVG. Missing anatomy is explicitly explained in the lesson. Do not claim that users can dissect valves in 3D.
+Each stage requires its practical actions and a correct answer. Select Observe, Probe, Scissors or Forceps as directed. For incisions, press at checkpoint 1 and trace through the remaining highlighted checkpoints with a mouse or finger. A keyboard-accessible guided-cut button provides equivalent actions. Previous preserves completed work; resetting the dissection clears all tasks, answers, incisions and openings. The first two lesson sections retain their existing interactions. The body view uses an anatomical heart image rendered from the attributed GLB model (`models/heart-anterior.png`).
+
+**Scientific limitations:** The pericardium is a simulated translucent teaching shell. The source GLB has one combined ventricular-wall mesh and solid cavity surfaces, so independent, animated viewing windows represent opening the free walls. They preserve the rest of the mesh but do not simulate tissue cutting, mechanical flaps or measured incision paths. Valve cusps, chordae tendineae, papillary muscles, pulmonary veins and inferior vena cava are not included in the source model. Labelled teaching sections supply the missing internal anatomy and identify the septum schematically. Wall thickness comparisons are illustrative, not measurements from the GLB. The torso is an illustrative SVG. The original source webpage could not be fetched in this environment; the stage mapping follows the 12-stage procedure text supplied by the user.
+
+## Local development and validation
+
+No installation or build is needed. From this repository run `python3 -m http.server 8000 --bind 127.0.0.1`. The browser needs access to `cdn.jsdelivr.net` for the pinned Three.js modules. A complete browser check should exercise all 12 stages, verify action/question gates, retry an incorrect answer, trace each incision, and verify Previous, reset, exploration and body-view interactions. Check on both desktop and a touch viewport. No automated test framework is required by the application.
 
 ## Publish on GitHub Pages
 
