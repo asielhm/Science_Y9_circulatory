@@ -18,6 +18,8 @@ const descriptions={
 const list=Object.keys(descriptions); let page=0,stage=0,selected=null,model=null,camera,scene,renderer,controls,ready=false,mouse=new THREE.Vector2(),raycaster=new THREE.Raycaster();
 const progress = stages.map(() => ({tasks:new Set(), cut:0, answer:null, correct:false}));
 let tool='observe', completed=false, guideNodes=[], tracing=false, membrane=null;
+const specimenBounds=new THREE.Box3();
+let viewerWidth=0,viewerHeight=0;
 const reveal={right:{value:0},left:{value:0},aorta:{value:0}};
 const revealTargets={right:0,left:0,aorta:0};
 const toolNames={observe:'Observe',probe:'Probe',scissors:'Scissors',forceps:'Forceps'};
@@ -89,7 +91,7 @@ function renderStage(){
  $('#anatomyInset').hidden=!s.diagram;$('#anatomyInset').innerHTML=s.diagram?anatomyDiagram(s.diagram):'';
  $('#nextCut').hidden=!s.cut;$('#prevDissect').disabled=stage===0;
  $('#specimenStatus').hidden=false;$('#viewtag').textContent=s.cut?'GUIDED INCISION':'ROTATABLE 3D';
- if(s.cut&&camera){camera.position.set(0,0,7);controls.target.set(0,0,0);controls.update();}
+ if(s.cut&&camera)recenterModel();
  setHidden([]);select(null);makeGuide();useTool(s.tool==='scissors'?'observe':s.tool==='forceps'?'observe':s.tool);updateSpecimen();
 }
 function perform(){
@@ -115,7 +117,7 @@ function updateSpecimen(){
  if(!active)for(const key of Object.keys(reveal))reveal[key].value=0;
  if(membrane)membrane.visible=active&&(stage===0||stage===1&&!progress[1].tasks.has('pericardium'));
  if(controls){controls.enabled=!(active&&s.cut);controls.enableRotate=!(active&&s.cut);}
- $('#front').disabled=active&&!!s.cut;$('#zoomIn').disabled=active&&!!s.cut;$('#zoomOut').disabled=active&&!!s.cut;
+ $('#front').disabled=!model;$('#zoomIn').disabled=active&&!!s.cut;$('#zoomOut').disabled=active&&!!s.cut;
  updateGuidePosition();
 }
 function installCutaway(mesh){
@@ -191,20 +193,45 @@ function loadModel(){if(ready)return;ready=true;
  });
  new GLTFLoader().load('./models/heart.glb',g=>{
  model=g.scene;model.traverse(o=>{if(o.isMesh)installCutaway(o)});
- const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());const scale=3.6/Math.max(size.x,size.y,size.z);model.scale.setScalar(scale);model.position.copy(center).multiplyScalar(-scale);scene.add(model);
+ const box=new THREE.Box3().setFromObject(model),size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());const scale=3.6/Math.max(size.x,size.y,size.z);model.scale.setScalar(scale);model.position.copy(center).multiplyScalar(-scale);scene.add(model);specimenBounds.setFromObject(model);
  membrane=new THREE.Mesh(new THREE.SphereGeometry(1,40,28),new THREE.MeshPhysicalMaterial({color:0xcee3df,transparent:true,opacity:.19,roughness:.35,side:THREE.DoubleSide,depthWrite:false}));membrane.scale.set(1.27,1.5,1.35);membrane.position.set(0,-.16,.1);membrane.userData.helper=true;model.add(membrane);
- controls.target.set(0,0,0);camera.position.set(0,0,7);controls.update();$('#loading').hidden=true;updateSpecimen();if(page===2)updateGates();resize();
+ recenterModel();$('#loading').hidden=true;updateSpecimen();if(page===2)updateGates();resize();
  },undefined,err=>{$('#loading').textContent='Could not load the heart model. Check models/heart.glb and reload. '+(err.message||'')});
  function frame(){requestAnimationFrame(frame);controls.update();for(const key of Object.keys(reveal)){reveal[key].value=THREE.MathUtils.lerp(reveal[key].value,revealTargets[key],.085);if(Math.abs(reveal[key].value-revealTargets[key])<.001)reveal[key].value=revealTargets[key];}if(page>0)renderer.render(scene,camera);}frame();new ResizeObserver(resize).observe(holder);resize();
 }
-function resize(){if(!renderer||!camera)return;const e=$('#canvas'),w=e.clientWidth,h=e.clientHeight;if(w&&h){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);updateGuidePosition()}}
+function recenterModel(){
+ if(!model||!camera||!controls||specimenBounds.isEmpty())return;
+ const holder=$('#canvas');
+ if(holder.clientWidth&&holder.clientHeight){camera.aspect=holder.clientWidth/holder.clientHeight;camera.updateProjectionMatrix();}
+ const center=specimenBounds.getCenter(new THREE.Vector3());
+ const size=specimenBounds.getSize(new THREE.Vector3());
+ const halfFov=THREE.MathUtils.degToRad(camera.fov/2);
+ // Fit both dimensions with space around the specimen, including its depth.
+ const distance=Math.max(size.y,size.x/camera.aspect)/(2*Math.tan(halfFov)) * 1.15+size.z/2;
+ const damping=controls.enableDamping;
+ controls.enableDamping=false;controls.update(); // Consume any remaining rotation momentum.
+ controls.maxDistance=Math.max(14,distance*2);
+ controls.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(0,0,distance));
+ controls.update();controls.enableDamping=damping;
+ updateGuidePosition();
+}
+function resize(){
+ if(!renderer||!camera)return;
+ const e=$('#canvas'),w=e.clientWidth,h=e.clientHeight;
+ if(w&&h){
+  const changed=w!==viewerWidth||h!==viewerHeight;
+  viewerWidth=w;viewerHeight=h;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);
+  if(changed)recenterModel();
+  updateGuidePosition();
+ }
+}
 $$('.step').forEach(b=>b.onclick=()=>setPage(+b.dataset.page));$$('[data-go]').forEach(b=>b.onclick=()=>setPage(+b.dataset.go));
 $$('.reveal').forEach(b=>b.onclick=()=>{const e=document.getElementById(b.dataset.answer);e.hidden=!e.hidden;b.textContent=e.hidden?'Reveal explanation ↓':'Hide explanation ↑'});
 $('#bodyHeart').addEventListener('click',()=>setPage(1));$('#bodyHeart').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setPage(1)}});
 $('#actionDissect').onclick=perform;$('#prevDissect').onclick=()=>{if(stage>0){stage--;renderStage();$('#dissectTitle').focus({preventScroll:true});}};
 $('#resetDissect').onclick=resetDissection;$('#resetAll').onclick=()=>{resetDissection();setPage(0)};
-$('#front').onclick=()=>{if(!controls)return;camera.position.set(0,0,7);controls.target.set(0,0,0);controls.update()};
-$('#zoomIn').onclick=()=>{if(camera){camera.position.multiplyScalar(.8);controls.update()}};$('#zoomOut').onclick=()=>{if(camera){camera.position.multiplyScalar(1.25);controls.update()}};
+$('#front').onclick=recenterModel;
+$('#zoomIn').onclick=()=>{if(camera){camera.position.sub(controls.target).multiplyScalar(.8).add(controls.target);controls.update()}};$('#zoomOut').onclick=()=>{if(camera){camera.position.sub(controls.target).multiplyScalar(1.25).add(controls.target);controls.update()}};
 for(const [i,s] of stages.entries()){const li=document.createElement('li');li.textContent=s.title;$('#procedureList').appendChild(li);}
 for(const b of $$('[data-tool]'))b.onclick=()=>useTool(b.dataset.tool);
 $('#nextCut').onclick=makeCut;
